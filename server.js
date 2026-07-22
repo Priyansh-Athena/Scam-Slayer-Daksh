@@ -1,458 +1,799 @@
+const crypto = require("crypto");
 const express = require("express");
 const http = require("http");
-const socketIo = require("socket.io");
-const cors = require("cors");
 const path = require("path");
+const { Server } = require("socket.io");
+const questions = require("./questions");
 
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-	cors: {
-		origin: "*",
-		methods: ["GET", "POST"],
-	},
-});
+const DEFAULT_QUESTION_SECONDS = 60;
+const DEFAULT_MAX_PLAYERS = 50;
+const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
+const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
+const HOST_RECONNECT_GRACE_MS = 12 * 1000;
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-app.use(cors());
-app.use(express.static("public"));
-
-// Game state
-let gameState = {
-	isGameActive: false,
-	host: null,
-	players: {},
-	currentQuestion: 0,
-	questionTimer: null,
-	showingLeaderboard: false,
-	questions: [
-		{
-			question:
-				"You receive an email claiming you've won $1 million, but need to pay a 'processing fee' first. What should you do?",
-			options: [
-				"Pay the fee immediately",
-				"Delete the email",
-				"Forward it to friends",
-				"Call the number provided",
-			],
-			correct: 1,
-		},
-		{
-			question: "Which of these is a strong password?",
-			options: ["password123", "MyDog2023!", "123456789", "qwerty"],
-			correct: 1,
-		},
-		{
-			question:
-				"A pop-up says your computer is infected and offers to fix it for $99. What should you do?",
-			options: [
-				"Pay immediately",
-				"Close the pop-up and run your antivirus",
-				"Call the number shown",
-				"Download their 'fix' software",
-			],
-			correct: 1,
-		},
-		{
-			question: "What is phishing?",
-			options: [
-				"A type of fishing",
-				"Fraudulent attempts to obtain sensitive information",
-				"A computer virus",
-				"A social media platform",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"Someone calls claiming to be from your bank and asks for your PIN. What should you do?",
-			options: [
-				"Give them your PIN",
-				"Hang up and call your bank directly",
-				"Ask for their employee ID",
-				"Transfer money to a 'safe' account",
-			],
-			correct: 1,
-		},
-		{
-			question: "Which link is most likely to be suspicious?",
-			options: [
-				"https://amazon.com",
-				"http://amaz0n-security.tk",
-				"https://google.com",
-				"https://microsoft.com",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"What should you do before clicking on email attachments?",
-			options: [
-				"Always open them immediately",
-				"Scan them with antivirus software",
-				"Forward them to friends first",
-				"Open them on public computers only",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"A stranger on social media offers you easy money for sharing your bank details. What should you do?",
-			options: [
-				"Share your details",
-				"Block and report them",
-				"Ask for more information",
-				"Share with friends first",
-			],
-			correct: 1,
-		},
-		{
-			question: "What is two-factor authentication (2FA)?",
-			options: [
-				"Using two passwords",
-				"An extra security layer requiring two forms of verification",
-				"Two antivirus programs",
-				"Two email accounts",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"You get a text saying your account will be closed unless you click a link immediately. What should you do?",
-			options: [
-				"Click the link quickly",
-				"Ignore it and check your account directly",
-				"Reply with your password",
-				"Forward it to others",
-			],
-			correct: 1,
-		},
-		{
-			question: "Which Wi-Fi network is safest to use?",
-			options: [
-				"Free public Wi-Fi",
-				"Password-protected home network",
-				"Open network at a café",
-				"Any network with a strong signal",
-			],
-			correct: 1,
-		},
-		{
-			question: "What is ransomware?",
-			options: [
-				"Free software",
-				"Malware that encrypts files and demands payment",
-				"A type of antivirus",
-				"A social media app",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"Someone offers to help you make money by using your bank account to transfer funds. This is likely:",
-			options: [
-				"A great opportunity",
-				"Money laundering (illegal)",
-				"A legitimate job",
-				"A bank promotion",
-			],
-			correct: 1,
-		},
-		{
-			question: "How often should you update your passwords?",
-			options: [
-				"Never",
-				"Regularly, especially after security breaches",
-				"Only when you forget them",
-				"Once a year is enough",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"A website asks for your Social Security Number to enter a 'free' contest. What should you do?",
-			options: [
-				"Provide it to enter",
-				"Leave the website immediately",
-				"Ask friends if it's safe",
-				"Provide a fake number",
-			],
-			correct: 1,
-		},
-		{
-			question: "What should you do if you think you've been scammed?",
-			options: [
-				"Keep it secret",
-				"Report it to authorities and your bank",
-				"Try to get revenge",
-				"Ignore it and hope for the best",
-			],
-			correct: 1,
-		},
-		{
-			question: "Which email sender is most likely legitimate?",
-			options: [
-				"noreply@yourbank.com",
-				"security-alert@bankofamerica-verify.tk",
-				"urgent@paypal-security.net",
-				"admin@gmail-security.org",
-			],
-			correct: 0,
-		},
-		{
-			question: "What is social engineering in cybersecurity?",
-			options: [
-				"Building social networks",
-				"Manipulating people to reveal confidential information",
-				"Engineering social media apps",
-				"Creating social websites",
-			],
-			correct: 1,
-		},
-		{
-			question:
-				"You find a USB drive in a parking lot. What should you do?",
-			options: [
-				"Plug it into your computer to see what's on it",
-				"Leave it where you found it",
-				"Take it to security/lost and found",
-				"Use it for your own files",
-			],
-			correct: 2,
-		},
-		{
-			question:
-				"What's the best way to verify if a suspicious email is legitimate?",
-			options: [
-				"Reply to the email asking",
-				"Click the links to check",
-				"Contact the company directly using official contact info",
-				"Ask friends on social media",
-			],
-			correct: 2,
-		},
-	],
-};
-
-io.on("connection", (socket) => {
-	console.log("User connected:", socket.id);
-
-	// Send current game state to new connection
-	socket.emit("gameState", {
-		hasHost: !!gameState.host,
-		isGameActive: gameState.isGameActive,
-		showingLeaderboard: gameState.showingLeaderboard,
-		players: Object.values(gameState.players),
-	});
-
-	// Handle nickname setting
-	socket.on("setNickname", (nickname) => {
-		gameState.players[socket.id] = {
-			id: socket.id,
-			nickname: nickname,
-			score: 0,
-			hasAnswered: false,
-		};
-
-		io.emit("playerJoined", {
-			players: Object.values(gameState.players),
-		});
-	});
-
-	// Handle host selection
-	socket.on("becomeHost", (nickname) => {
-		if (!gameState.host && !gameState.isGameActive) {
-			gameState.host = socket.id;
-			gameState.players[socket.id] = {
-				id: socket.id,
-				nickname: nickname,
-				score: 0,
-				hasAnswered: false,
-				isHost: true,
-			};
-
-			io.emit("hostSelected", {
-				hostId: socket.id,
-				hostNickname: nickname,
-				players: Object.values(gameState.players),
-			});
-		}
-	});
-
-	// Handle game start
-	socket.on("startGame", () => {
-		if (socket.id === gameState.host && !gameState.isGameActive) {
-			gameState.isGameActive = true;
-			gameState.currentQuestion = 0;
-
-			// Reset all players' scores and answered status
-			Object.keys(gameState.players).forEach((playerId) => {
-				gameState.players[playerId].score = 0;
-				gameState.players[playerId].hasAnswered = false;
-			});
-
-			startQuestion();
-		}
-	});
-
-	// Handle answer submission
-	socket.on("submitAnswer", (answerIndex) => {
-		if (
-			gameState.isGameActive &&
-			!gameState.showingLeaderboard &&
-			gameState.players[socket.id]
-		) {
-			const player = gameState.players[socket.id];
-
-			if (!player.hasAnswered) {
-				player.hasAnswered = true;
-
-				// Notify all players that this player answered
-				io.emit("playerAnswered", {
-					playerNickname: player.nickname,
-					selectedAnswer: answerIndex,
-				});
-
-				// Check if answer is correct
-				if (
-					answerIndex ===
-					gameState.questions[gameState.currentQuestion].correct
-				) {
-					player.score += 1;
-				}
-
-				// Check if all players have answered
-				const allAnswered = Object.values(gameState.players).every(
-					(p) => p.hasAnswered
-				);
-
-				if (allAnswered) {
-					showLeaderboard();
-				}
-			}
-		}
-	});
-
-	// Handle next question
-	socket.on("nextQuestion", () => {
-		if (socket.id === gameState.host && gameState.showingLeaderboard) {
-			gameState.currentQuestion++;
-
-			if (gameState.currentQuestion >= gameState.questions.length) {
-				// Game over
-				endGame();
-			} else {
-				startQuestion();
-			}
-		}
-	});
-
-	// Handle game reset/play again
-	socket.on("resetGame", () => {
-		// Reset game state
-		gameState.isGameActive = false;
-		gameState.host = null;
-		gameState.currentQuestion = 0;
-		gameState.showingLeaderboard = false;
-		if (gameState.questionTimer) {
-			clearTimeout(gameState.questionTimer);
-			gameState.questionTimer = null;
-		}
-
-		// Reset all players' scores and status
-		Object.keys(gameState.players).forEach((playerId) => {
-			gameState.players[playerId].score = 0;
-			gameState.players[playerId].hasAnswered = false;
-			gameState.players[playerId].isHost = false;
-		});
-
-		// Notify all clients to reset
-		io.emit("gameReset", {
-			players: Object.values(gameState.players),
-		});
-	});
-
-	// Handle disconnection
-	socket.on("disconnect", () => {
-		console.log("User disconnected:", socket.id);
-
-		// If host disconnects, reset game
-		if (socket.id === gameState.host) {
-			gameState.host = null;
-			gameState.isGameActive = false;
-			gameState.showingLeaderboard = false;
-			if (gameState.questionTimer) {
-				clearTimeout(gameState.questionTimer);
-				gameState.questionTimer = null;
-			}
-
-			io.emit("hostDisconnected");
-		}
-
-		// Remove player
-		delete gameState.players[socket.id];
-
-		io.emit("playerLeft", {
-			players: Object.values(gameState.players),
-		});
-	});
-});
-
-function startQuestion() {
-	gameState.showingLeaderboard = false;
-
-	// Reset answered status for all players
-	Object.keys(gameState.players).forEach((playerId) => {
-		gameState.players[playerId].hasAnswered = false;
-	});
-
-	const question = gameState.questions[gameState.currentQuestion];
-
-	io.emit("newQuestion", {
-		questionNumber: gameState.currentQuestion + 1,
-		totalQuestions: gameState.questions.length,
-		question: question.question,
-		options: question.options,
-	});
-
-	// Start 60-second timer
-	gameState.questionTimer = setTimeout(() => {
-		showLeaderboard();
-	}, 60000);
+function integerFrom(value, fallback, minimum, maximum) {
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.min(maximum, Math.max(minimum, parsed));
 }
 
-function showLeaderboard() {
-	if (gameState.questionTimer) {
-		clearTimeout(gameState.questionTimer);
-		gameState.questionTimer = null;
+function cleanNickname(value) {
+	return String(value || "")
+		.replace(/[\u0000-\u001f\u007f]/g, "")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, 24);
+}
+
+function cleanRoomCode(value) {
+	return String(value || "")
+		.toUpperCase()
+		.replace(/[^A-Z0-9]/g, "")
+		.slice(0, 6);
+}
+
+function createQuizServer(options = {}) {
+	const questionSeconds = integerFrom(
+		options.questionSeconds ?? process.env.QUESTION_TIME_SECONDS,
+		DEFAULT_QUESTION_SECONDS,
+		15,
+		180
+	);
+	const maxPlayers = integerFrom(
+		options.maxPlayers ?? process.env.MAX_PLAYERS_PER_ROOM,
+		DEFAULT_MAX_PLAYERS,
+		2,
+		200
+	);
+
+	const app = express();
+	app.disable("x-powered-by");
+	app.use((req, res, next) => {
+		res.setHeader("X-Content-Type-Options", "nosniff");
+		res.setHeader("Referrer-Policy", "no-referrer");
+		res.setHeader(
+			"Permissions-Policy",
+			"camera=(), microphone=(), geolocation=()"
+		);
+		res.setHeader(
+			"Content-Security-Policy",
+			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:"
+		);
+		next();
+	});
+
+	app.get("/health", (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.status(200).json({
+			status: "ok",
+			rooms: rooms.size,
+			questions: questions.length,
+			uptimeSeconds: Math.round(process.uptime()),
+		});
+	});
+
+	app.get("/api/config", (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.json({
+			questionSeconds,
+			totalQuestions: questions.length,
+			maxPlayers,
+		});
+	});
+
+	app.use(express.static(path.join(__dirname, "public")));
+
+	const server = http.createServer(app);
+	const socketOptions = {
+		connectionStateRecovery: {
+			maxDisconnectionDuration: RECONNECT_WINDOW_MS,
+			skipMiddlewares: true,
+		},
+		pingInterval: 25_000,
+		pingTimeout: 20_000,
+	};
+
+	const allowedOrigins = String(process.env.FRONTEND_URL || "")
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+	if (allowedOrigins.length > 0) {
+		socketOptions.cors = {
+			origin: allowedOrigins,
+			methods: ["GET", "POST"],
+		};
 	}
 
-	gameState.showingLeaderboard = true;
+	const io = new Server(server, socketOptions);
+	const rooms = new Map();
 
-	const sortedPlayers = Object.values(gameState.players).sort(
-		(a, b) => b.score - a.score
-	);
+	function generateRoomCode() {
+		for (let attempt = 0; attempt < 100; attempt += 1) {
+			let code = "";
+			for (let index = 0; index < 6; index += 1) {
+				code += ROOM_ALPHABET[crypto.randomInt(ROOM_ALPHABET.length)];
+			}
+			if (!rooms.has(code)) return code;
+		}
+		throw new Error("Unable to generate a unique room code");
+	}
 
-	io.emit("showLeaderboard", {
-		players: sortedPlayers,
-		isGameOver: gameState.currentQuestion >= gameState.questions.length - 1,
+	function makeRoom() {
+		return {
+			code: generateRoomCode(),
+			state: "lobby",
+			hostPlayerId: null,
+			players: new Map(),
+			currentQuestion: -1,
+			questionStartedAt: null,
+			questionEndsAt: null,
+			questionTimer: null,
+			hostTransferTimer: null,
+			cleanupTimer: null,
+			createdAt: Date.now(),
+		};
+	}
+
+	function makePlayer(nickname) {
+		return {
+			id: crypto.randomUUID(),
+			token: crypto.randomBytes(24).toString("hex"),
+			nickname,
+			score: 0,
+			correctAnswers: 0,
+			hasAnswered: false,
+			answerIndex: null,
+			answeredAt: null,
+			connected: false,
+			socketId: null,
+			joinedAt: Date.now(),
+			disconnectTimer: null,
+		};
+	}
+
+	function sessionFor(room, player) {
+		return {
+			roomCode: room.code,
+			playerId: player.id,
+			playerToken: player.token,
+			nickname: player.nickname,
+		};
+	}
+
+	function publicPlayer(room, player) {
+		return {
+			id: player.id,
+			nickname: player.nickname,
+			score: player.score,
+			connected: player.connected,
+			isHost: room.hostPlayerId === player.id,
+			hasAnswered: Boolean(player.hasAnswered),
+		};
+	}
+
+	function sortedPlayers(room) {
+		return [...room.players.values()].sort((a, b) => {
+			if (b.score !== a.score) return b.score - a.score;
+			if (b.correctAnswers !== a.correctAnswers) {
+				return b.correctAnswers - a.correctAnswers;
+			}
+			return a.joinedAt - b.joinedAt;
+		});
+	}
+
+	function publicRoom(room) {
+		return {
+			roomCode: room.code,
+			state: room.state,
+			hostPlayerId: room.hostPlayerId,
+			players: [...room.players.values()]
+				.sort((a, b) => {
+					if (a.id === room.hostPlayerId) return -1;
+					if (b.id === room.hostPlayerId) return 1;
+					return a.joinedAt - b.joinedAt;
+				})
+				.map((player) => publicPlayer(room, player)),
+			currentQuestion:
+				room.currentQuestion >= 0 ? room.currentQuestion + 1 : 0,
+			totalQuestions: questions.length,
+			questionSeconds,
+		};
+	}
+
+	function emitRoomState(room) {
+		io.to(room.code).emit("roomState", publicRoom(room));
+	}
+
+	function findPlayerByToken(room, token) {
+		if (!token || typeof token !== "string") return null;
+		return (
+			[...room.players.values()].find((player) => player.token === token) ||
+			null
+		);
+	}
+
+	function contextFor(socket) {
+		const roomCode = socket.data.roomCode;
+		const playerId = socket.data.playerId;
+		const room = roomCode ? rooms.get(roomCode) : null;
+		const player = room && playerId ? room.players.get(playerId) : null;
+		return { room, player };
+	}
+
+	function acknowledge(callback, response) {
+		if (typeof callback === "function") callback(response);
+	}
+
+	function clearRoomCleanup(room) {
+		if (room.cleanupTimer) {
+			clearTimeout(room.cleanupTimer);
+			room.cleanupTimer = null;
+		}
+	}
+
+	function scheduleRoomCleanup(room) {
+		if (room.cleanupTimer) return;
+		room.cleanupTimer = setTimeout(() => {
+			const currentRoom = rooms.get(room.code);
+			if (!currentRoom) return;
+			const hasConnectedPlayer = [...currentRoom.players.values()].some(
+				(player) => player.connected
+			);
+			if (!hasConnectedPlayer) destroyRoom(currentRoom);
+		}, EMPTY_ROOM_TTL_MS);
+	}
+
+	function clearQuestionTimer(room) {
+		if (room.questionTimer) {
+			clearTimeout(room.questionTimer);
+			room.questionTimer = null;
+		}
+	}
+
+	function destroyRoom(room) {
+		clearQuestionTimer(room);
+		clearRoomCleanup(room);
+		if (room.hostTransferTimer) clearTimeout(room.hostTransferTimer);
+		for (const player of room.players.values()) {
+			if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+		}
+		rooms.delete(room.code);
+	}
+
+	function chooseNewHost(room) {
+		const nextHost = [...room.players.values()]
+			.filter((player) => player.connected)
+			.sort((a, b) => a.joinedAt - b.joinedAt)[0];
+		room.hostPlayerId = nextHost ? nextHost.id : null;
+		room.hostTransferTimer = null;
+		emitRoomState(room);
+	}
+
+	function scheduleHostTransfer(room, disconnectedHostId) {
+		if (room.hostTransferTimer) clearTimeout(room.hostTransferTimer);
+		room.hostTransferTimer = setTimeout(() => {
+			const currentRoom = rooms.get(room.code);
+			if (!currentRoom || currentRoom.hostPlayerId !== disconnectedHostId) {
+				return;
+			}
+			const host = currentRoom.players.get(disconnectedHostId);
+			if (host && host.connected) return;
+			chooseNewHost(currentRoom);
+		}, HOST_RECONNECT_GRACE_MS);
+	}
+
+	function attachSocket(room, player, socket) {
+		clearRoomCleanup(room);
+		if (player.disconnectTimer) {
+			clearTimeout(player.disconnectTimer);
+			player.disconnectTimer = null;
+		}
+
+		const previousSocketId = player.socketId;
+		player.socketId = socket.id;
+		player.connected = true;
+		socket.data.roomCode = room.code;
+		socket.data.playerId = player.id;
+		socket.join(room.code);
+
+		if (previousSocketId && previousSocketId !== socket.id) {
+			const previousSocket = io.sockets.sockets.get(previousSocketId);
+			if (previousSocket) previousSocket.disconnect(true);
+		}
+
+		if (room.hostPlayerId === player.id && room.hostTransferTimer) {
+			clearTimeout(room.hostTransferTimer);
+			room.hostTransferTimer = null;
+		}
+		if (!room.hostPlayerId) room.hostPlayerId = player.id;
+	}
+
+	function removePlayer(room, playerId) {
+		const player = room.players.get(playerId);
+		if (!player) return;
+		if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+		room.players.delete(playerId);
+
+		if (room.hostPlayerId === playerId) chooseNewHost(room);
+		if (room.players.size === 0) {
+			destroyRoom(room);
+			return;
+		}
+
+		emitRoomState(room);
+		if (room.state === "question") maybeFinishQuestion(room);
+	}
+
+	function connectedPlayers(room) {
+		return [...room.players.values()].filter((player) => player.connected);
+	}
+
+	function answerProgress(room) {
+		const activePlayers = connectedPlayers(room);
+		return {
+			answeredCount: activePlayers.filter((player) => player.hasAnswered)
+				.length,
+			totalPlayers: activePlayers.length,
+		};
+	}
+
+	function allConnectedPlayersAnswered(room) {
+		const activePlayers = connectedPlayers(room);
+		return (
+			activePlayers.length > 0 &&
+			activePlayers.every((player) => player.hasAnswered)
+		);
+	}
+
+	function questionPayload(room, player = null) {
+		const question = questions[room.currentQuestion];
+		return {
+			questionNumber: room.currentQuestion + 1,
+			totalQuestions: questions.length,
+			category: question.category,
+			question: question.question,
+			options: question.options,
+			deadline: room.questionEndsAt,
+			durationMs: questionSeconds * 1000,
+			hasAnswered: player ? player.hasAnswered : false,
+			selectedAnswer: player ? player.answerIndex : null,
+			...answerProgress(room),
+		};
+	}
+
+	function startNextQuestion(room) {
+		clearQuestionTimer(room);
+		room.currentQuestion += 1;
+		if (room.currentQuestion >= questions.length) {
+			finishGame(room);
+			return;
+		}
+
+		room.state = "question";
+		room.questionStartedAt = Date.now();
+		room.questionEndsAt = room.questionStartedAt + questionSeconds * 1000;
+
+		for (const player of room.players.values()) {
+			player.hasAnswered = false;
+			player.answerIndex = null;
+			player.answeredAt = null;
+		}
+
+		io.to(room.code).emit("newQuestion", questionPayload(room));
+		emitRoomState(room);
+		room.questionTimer = setTimeout(
+			() => showQuestionResult(room),
+			questionSeconds * 1000
+		);
+	}
+
+	function resultPayload(room, player) {
+		const question = questions[room.currentQuestion];
+		const leaderboard = sortedPlayers(room).map((item) =>
+			publicPlayer(room, item)
+		);
+		const answerBreakdown = question.options.map((_, index) =>
+			[...room.players.values()].filter(
+				(item) => item.answerIndex === index
+			).length
+		);
+		return {
+			questionNumber: room.currentQuestion + 1,
+			totalQuestions: questions.length,
+			category: question.category,
+			correctAnswer: question.correct,
+			correctAnswerText: question.options[question.correct],
+			tip: question.tip,
+			options: question.options,
+			answerBreakdown,
+			players: leaderboard,
+			yourAnswer: player ? player.answerIndex : null,
+			wasCorrect: player
+				? player.answerIndex === question.correct
+				: false,
+			yourScore: player ? player.score : 0,
+			isLastQuestion: room.currentQuestion === questions.length - 1,
+		};
+	}
+
+	function showQuestionResult(room) {
+		if (!rooms.has(room.code) || room.state !== "question") return;
+		clearQuestionTimer(room);
+		room.state = "results";
+		room.questionEndsAt = null;
+
+		for (const player of room.players.values()) {
+			if (player.connected && player.socketId) {
+				io.to(player.socketId).emit(
+					"questionResult",
+					resultPayload(room, player)
+				);
+			}
+		}
+		emitRoomState(room);
+	}
+
+	function maybeFinishQuestion(room) {
+		if (room.state !== "question" || !allConnectedPlayersAnswered(room)) {
+			return;
+		}
+		clearQuestionTimer(room);
+		room.questionTimer = setTimeout(() => showQuestionResult(room), 650);
+	}
+
+	function gameOverPayload(room, player) {
+		const leaderboard = sortedPlayers(room).map((item) =>
+			publicPlayer(room, item)
+		);
+		const rank = player
+			? leaderboard.findIndex((item) => item.id === player.id) + 1
+			: 0;
+		return {
+			players: leaderboard,
+			yourScore: player ? player.score : 0,
+			yourRank: rank,
+			totalQuestions: questions.length,
+		};
+	}
+
+	function finishGame(room) {
+		clearQuestionTimer(room);
+		room.state = "finished";
+		room.questionEndsAt = null;
+		for (const player of room.players.values()) {
+			if (player.connected && player.socketId) {
+				io.to(player.socketId).emit("gameOver", gameOverPayload(room, player));
+			}
+		}
+		emitRoomState(room);
+	}
+
+	function syncSocketToRoom(room, player, socket) {
+		socket.emit("roomState", publicRoom(room));
+		if (room.state === "question") {
+			socket.emit("newQuestion", questionPayload(room, player));
+		} else if (room.state === "results") {
+			socket.emit("questionResult", resultPayload(room, player));
+		} else if (room.state === "finished") {
+			socket.emit("gameOver", gameOverPayload(room, player));
+		}
+	}
+
+	io.on("connection", (socket) => {
+		socket.emit("appConfig", {
+			questionSeconds,
+			totalQuestions: questions.length,
+			maxPlayers,
+		});
+
+		socket.on("createRoom", (payload, callback) => {
+			const nickname = cleanNickname(payload && payload.nickname);
+			if (nickname.length < 2) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Please enter a nickname with at least 2 characters.",
+				});
+				return;
+			}
+
+			const room = makeRoom();
+			const player = makePlayer(nickname);
+			room.players.set(player.id, player);
+			room.hostPlayerId = player.id;
+			rooms.set(room.code, room);
+			attachSocket(room, player, socket);
+			acknowledge(callback, {
+				ok: true,
+				session: sessionFor(room, player),
+			});
+			emitRoomState(room);
+		});
+
+		socket.on("joinRoom", (payload, callback) => {
+			const nickname = cleanNickname(payload && payload.nickname);
+			const roomCode = cleanRoomCode(payload && payload.roomCode);
+			const room = rooms.get(roomCode);
+
+			if (nickname.length < 2) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Please enter a nickname with at least 2 characters.",
+				});
+				return;
+			}
+			if (!room) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Room not found. Check the six-character code.",
+				});
+				return;
+			}
+			if (room.state !== "lobby") {
+				acknowledge(callback, {
+					ok: false,
+					message: "This quiz has already started.",
+				});
+				return;
+			}
+			if (room.players.size >= maxPlayers) {
+				acknowledge(callback, {
+					ok: false,
+					message: "This room is full.",
+				});
+				return;
+			}
+			const duplicateName = [...room.players.values()].some(
+				(player) =>
+					player.nickname.localeCompare(nickname, undefined, {
+						sensitivity: "accent",
+					}) === 0
+			);
+			if (duplicateName) {
+				acknowledge(callback, {
+					ok: false,
+					message: "That nickname is already being used in this room.",
+				});
+				return;
+			}
+
+			const player = makePlayer(nickname);
+			room.players.set(player.id, player);
+			attachSocket(room, player, socket);
+			acknowledge(callback, {
+				ok: true,
+				session: sessionFor(room, player),
+			});
+			emitRoomState(room);
+			io.to(room.code).emit("playerJoined", {
+				playerId: player.id,
+				nickname: player.nickname,
+			});
+		});
+
+		socket.on("resumeSession", (payload, callback) => {
+			const roomCode = cleanRoomCode(payload && payload.roomCode);
+			const room = rooms.get(roomCode);
+			const player = room
+				? findPlayerByToken(room, payload && payload.playerToken)
+				: null;
+			if (!room || !player) {
+				acknowledge(callback, {
+					ok: false,
+					message: "That saved quiz session has expired.",
+				});
+				return;
+			}
+
+			attachSocket(room, player, socket);
+			acknowledge(callback, {
+				ok: true,
+				session: sessionFor(room, player),
+			});
+			emitRoomState(room);
+			syncSocketToRoom(room, player, socket);
+		});
+
+		socket.on("startGame", (payload, callback) => {
+			const { room, player } = contextFor(socket);
+			if (!room || !player || room.hostPlayerId !== player.id) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Only the host can start the quiz.",
+				});
+				return;
+			}
+			if (room.state !== "lobby") {
+				acknowledge(callback, {
+					ok: false,
+					message: "The quiz is not in the lobby.",
+				});
+				return;
+			}
+
+			for (const item of room.players.values()) {
+				item.score = 0;
+				item.correctAnswers = 0;
+				item.hasAnswered = false;
+				item.answerIndex = null;
+			}
+			room.currentQuestion = -1;
+			acknowledge(callback, { ok: true });
+			startNextQuestion(room);
+		});
+
+		socket.on("submitAnswer", (payload, callback) => {
+			const { room, player } = contextFor(socket);
+			const answerIndex = Number(payload && payload.answerIndex);
+			if (!room || !player || room.state !== "question") {
+				acknowledge(callback, {
+					ok: false,
+					message: "There is no active question.",
+				});
+				return;
+			}
+			if (!Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Invalid answer.",
+				});
+				return;
+			}
+			if (player.hasAnswered) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Your answer is already locked.",
+				});
+				return;
+			}
+			if (room.questionEndsAt && Date.now() > room.questionEndsAt + 1000) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Time is up for this question.",
+				});
+				showQuestionResult(room);
+				return;
+			}
+
+			player.hasAnswered = true;
+			player.answerIndex = answerIndex;
+			player.answeredAt = Date.now();
+			const question = questions[room.currentQuestion];
+			if (answerIndex === question.correct) {
+				player.score += 1;
+				player.correctAnswers += 1;
+			}
+
+			acknowledge(callback, { ok: true });
+			io.to(room.code).emit("playerAnswered", {
+				playerId: player.id,
+				nickname: player.nickname,
+			});
+			io.to(room.code).emit("answerProgress", answerProgress(room));
+			maybeFinishQuestion(room);
+		});
+
+		socket.on("nextQuestion", (payload, callback) => {
+			const { room, player } = contextFor(socket);
+			if (
+				!room ||
+				!player ||
+				room.hostPlayerId !== player.id ||
+				room.state !== "results"
+			) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Only the host can continue from the results screen.",
+				});
+				return;
+			}
+
+			acknowledge(callback, { ok: true });
+			if (room.currentQuestion >= questions.length - 1) finishGame(room);
+			else startNextQuestion(room);
+		});
+
+		socket.on("resetGame", (payload, callback) => {
+			const { room, player } = contextFor(socket);
+			if (!room || !player || room.hostPlayerId !== player.id) {
+				acknowledge(callback, {
+					ok: false,
+					message: "Only the host can start another round.",
+				});
+				return;
+			}
+
+			clearQuestionTimer(room);
+			room.state = "lobby";
+			room.currentQuestion = -1;
+			room.questionStartedAt = null;
+			room.questionEndsAt = null;
+			for (const item of room.players.values()) {
+				item.score = 0;
+				item.correctAnswers = 0;
+				item.hasAnswered = false;
+				item.answerIndex = null;
+				item.answeredAt = null;
+			}
+			acknowledge(callback, { ok: true });
+			io.to(room.code).emit("gameReset", { roomCode: room.code });
+			emitRoomState(room);
+		});
+
+		socket.on("leaveRoom", (payload, callback) => {
+			const { room, player } = contextFor(socket);
+			if (!room || !player) {
+				acknowledge(callback, { ok: true });
+				return;
+			}
+			socket.leave(room.code);
+			socket.data.roomCode = null;
+			socket.data.playerId = null;
+			removePlayer(room, player.id);
+			acknowledge(callback, { ok: true });
+		});
+
+		socket.on("disconnect", () => {
+			const { room, player } = contextFor(socket);
+			if (!room || !player || player.socketId !== socket.id) return;
+
+			player.connected = false;
+			player.socketId = null;
+			emitRoomState(room);
+
+			if (room.hostPlayerId === player.id) {
+				scheduleHostTransfer(room, player.id);
+			}
+			if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+			player.disconnectTimer = setTimeout(
+				() => removePlayer(room, player.id),
+				RECONNECT_WINDOW_MS
+			);
+
+			if (connectedPlayers(room).length === 0) scheduleRoomCleanup(room);
+			else if (room.state === "question") {
+				setTimeout(() => maybeFinishQuestion(room), 1500);
+			}
+		});
 	});
+
+	async function close() {
+		for (const room of rooms.values()) destroyRoom(room);
+		await new Promise((resolve) => {
+			io.close(() => {
+				if (server.listening) server.close(resolve);
+				else resolve();
+			});
+		});
+	}
+
+	return {
+		app,
+		server,
+		io,
+		rooms,
+		close,
+		config: { questionSeconds, maxPlayers },
+	};
 }
 
-function endGame() {
-	gameState.isGameActive = false;
-	gameState.showingLeaderboard = false;
-	gameState.currentQuestion = 0;
-
-	const finalLeaderboard = Object.values(gameState.players).sort(
-		(a, b) => b.score - a.score
-	);
-
-	io.emit("gameOver", {
-		finalLeaderboard: finalLeaderboard,
+if (require.main === module) {
+	const port = integerFrom(process.env.PORT, 3000, 1, 65535);
+	const quizServer = createQuizServer();
+	quizServer.server.listen(port, "0.0.0.0", () => {
+		console.log(`Scam Slayer is running on port ${port}`);
 	});
+
+	let shuttingDown = false;
+	const shutdown = async (signal) => {
+		if (shuttingDown) return;
+		shuttingDown = true;
+		console.log(`${signal} received. Closing server...`);
+		await quizServer.close();
+		process.exit(0);
+	};
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
+	process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-	console.log(`Server running on port ${PORT}`);
-});
+module.exports = { createQuizServer };

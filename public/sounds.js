@@ -1,91 +1,74 @@
-// Sound System for SCam Slayer
-class SoundSystem {
-	constructor() {
-		this.audioContext = null;
-		this.sounds = {};
-		this.enabled = true;
-		this.volume = 0.3;
-		this.init();
-	}
+(() => {
+	"use strict";
 
-	init() {
-		// Initialize AudioContext on first user interaction
-		document.addEventListener(
-			"click",
-			() => {
-				if (!this.audioContext) {
-					this.audioContext = new (window.AudioContext ||
-						window.webkitAudioContext)();
-					this.createSounds();
-				}
-			},
-			{ once: true }
-		);
-	}
+	class SoundSystem {
+		constructor() {
+			this.audioContext = null;
+			this.enabled = true;
+			this.volume = 0.2;
+			this.sounds = {
+				correct: () => this.playSequence([523, 659, 784], 0.16, "sine", 0.06),
+				incorrect: () => this.playSequence([247, 196, 165], 0.18, "triangle", 0.08),
+				timer: () => this.playSequence([440], 0.045, "sine"),
+				timerWarning: () => this.playSequence([880, 660], 0.07, "triangle", 0.05),
+				gameStart: () => this.playSequence([262, 330, 392, 523], 0.12, "sine", 0.07),
+				gameEnd: () => this.playSequence([392, 523, 659, 784], 0.16, "sine", 0.09),
+				playerJoin: () => this.playSequence([392, 523], 0.09, "sine", 0.05),
+				buttonClick: () => this.playSequence([660], 0.035, "sine"),
+			};
 
-	createSounds() {
-		// Create different sound effects using oscillators
-		this.sounds = {
-			correct: () => this.playTone([523, 659, 784], 0.2, "sine"), // C-E-G major chord
-			incorrect: () => this.playTone([220, 185, 165], 0.3, "sawtooth"), // Descending error sound
-			timer: () => this.playTone([440], 0.1, "square"), // Timer tick
-			timerWarning: () => this.playTone([880, 440], 0.2, "triangle"), // Warning beep
-			gameStart: () => this.playTone([262, 330, 392, 523], 0.15, "sine"), // Start melody
-			gameEnd: () =>
-				this.playTone([523, 494, 440, 392, 349, 330], 0.2, "sine"), // End melody
-			playerJoin: () => this.playTone([392, 523], 0.1, "sine"), // Join sound
-			buttonClick: () => this.playTone([880], 0.05, "square"), // Button click
-			popup: () => this.playTone([659, 784], 0.1, "sine"), // Popup notification
-		};
-	}
+			document.addEventListener("pointerdown", () => this.ensureContext(), {
+				once: true,
+				passive: true,
+			});
+		}
 
-	playTone(frequencies, duration, type = "sine") {
-		if (!this.audioContext || !this.enabled) return;
+		ensureContext() {
+			if (!this.audioContext) {
+				const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+				if (!AudioContextClass) return null;
+				this.audioContext = new AudioContextClass();
+			}
+			if (this.audioContext.state === "suspended") {
+				this.audioContext.resume().catch(() => {});
+			}
+			return this.audioContext;
+		}
 
-		frequencies.forEach((freq, index) => {
-			const oscillator = this.audioContext.createOscillator();
-			const gainNode = this.audioContext.createGain();
+		playSequence(frequencies, duration, type = "sine", gap = 0) {
+			if (!this.enabled) return;
+			const context = this.ensureContext();
+			if (!context) return;
 
-			oscillator.connect(gainNode);
-			gainNode.connect(this.audioContext.destination);
+			frequencies.forEach((frequency, index) => {
+				const oscillator = context.createOscillator();
+				const gain = context.createGain();
+				const start = context.currentTime + index * (duration + gap);
+				const end = start + duration;
 
-			oscillator.frequency.setValueAtTime(
-				freq,
-				this.audioContext.currentTime
-			);
-			oscillator.type = type;
+				oscillator.type = type;
+				oscillator.frequency.setValueAtTime(frequency, start);
+				gain.gain.setValueAtTime(0.0001, start);
+				gain.gain.exponentialRampToValueAtTime(this.volume, start + 0.01);
+				gain.gain.exponentialRampToValueAtTime(0.0001, end);
+				oscillator.connect(gain);
+				gain.connect(context.destination);
+				oscillator.start(start);
+				oscillator.stop(end + 0.01);
+			});
+		}
 
-			gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-			gainNode.gain.linearRampToValueAtTime(
-				this.volume,
-				this.audioContext.currentTime + 0.01
-			);
-			gainNode.gain.linearRampToValueAtTime(
-				0,
-				this.audioContext.currentTime + duration
-			);
+		play(name) {
+			const sound = this.sounds[name];
+			if (sound) sound();
+		}
 
-			const startTime = this.audioContext.currentTime + index * 0.1;
-			oscillator.start(startTime);
-			oscillator.stop(startTime + duration);
-		});
-	}
-
-	play(soundName) {
-		if (this.sounds[soundName]) {
-			this.sounds[soundName]();
+		toggle() {
+			this.enabled = !this.enabled;
+			if (this.enabled) this.ensureContext();
+			return this.enabled;
 		}
 	}
 
-	toggle() {
-		this.enabled = !this.enabled;
-		return this.enabled;
-	}
-
-	setVolume(volume) {
-		this.volume = Math.max(0, Math.min(1, volume));
-	}
-}
-
-// Global sound system instance
-const soundSystem = new SoundSystem();
+	window.soundSystem = new SoundSystem();
+})();

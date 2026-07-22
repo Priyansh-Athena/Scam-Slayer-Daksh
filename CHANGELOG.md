@@ -1,94 +1,35 @@
-# 🛡️ SCam Slayer - Changelog
+# Changelog
 
-## Version 2.0.0 - Cybersecurity Education Update
+## 2.0.0 — Multiplayer rooms and redesigned interface
 
-### 🎮 Game Rebranding
+### Question bank
 
--   **New Name**: "SCam Slayer - Cybersecurity Awareness Quiz"
--   **New Focus**: Educational game teaching scam prevention and online safety
--   **Updated Branding**: Cybersecurity-themed UI with shield emoji (🛡️)
+- Replaced the generic quiz with the 20 Scam Slayer questions supplied for the project.
+- Preserved the four-option format, correct answer, and educational tip after every question.
+- Updated several statements for safer current wording, including KYC verification, QR/UPI authorisation, SBI's current internet-banking address, call-forwarding scams, investment-group scams, sextortion evidence, and loan-app harassment.
 
-### 🔊 Sound System (NEW!)
+### Multiplayer server
 
--   **Interactive Sound Effects**: Added comprehensive sound system using Web Audio API
--   **Sound Types**:
-    -   ✅ Correct answer sound (major chord)
-    -   ❌ Incorrect answer sound (descending tone)
-    -   ⏱️ Timer tick sound
-    -   ⚠️ Timer warning sound (last 10 seconds)
-    -   🎮 Game start melody
-    -   🏁 Game end melody
-    -   👥 Player join notification
-    -   🔘 Button click feedback
-    -   📢 Answer popup notification
--   **Sound Toggle**: Players can enable/disable sounds with 🔊/🔇 button
--   **Volume Control**: Optimized volume levels for pleasant experience
+- Added independent six-character room codes.
+- Added host and player session tokens for reconnecting after a network drop or refresh.
+- Added server-controlled deadlines and score calculation.
+- Added host reassignment after a disconnect grace period.
+- Added inactive-player and empty-room cleanup.
+- Prevented answer choices from being revealed in `playerAnswered` events.
+- Added `/health` and `/api/config` endpoints.
+- Added graceful shutdown handling for Railway deployments.
 
-### 📚 Educational Content (NEW!)
+### Interface
 
--   **20 Cybersecurity Questions**: Comprehensive quiz covering:
-    -   🎣 Phishing identification
-    -   💰 Financial scam recognition
-    -   🔐 Password security best practices
-    -   📱 Social engineering tactics
-    -   🛡️ Two-factor authentication (2FA)
-    -   🌐 Safe browsing habits
-    -   📧 Email safety and attachments
-    -   🔒 Ransomware awareness
-    -   📞 Phone scam prevention
-    -   💻 General cybersecurity practices
+- Rebuilt the home, lobby, question, results, and final-score screens.
+- Added large answer buttons, high-contrast text, focus states, responsive layouts, progress indicators, a circular timer, room sharing, answer distribution, and personalised results.
+- Removed third-party fonts and analytics.
+- Added reconnect and connection-status feedback.
+- Added optional generated sound effects with a persistent mute setting.
 
-### 🎨 UI Enhancements
+### Deployment and quality
 
--   **Cybersecurity Theme**: Green-to-red gradient in title (representing security to danger)
--   **Game Subtitle**: Added "Cybersecurity Awareness Quiz" subtitle
--   **Enhanced Branding**: Updated all references from generic quiz to SCam Slayer
--   **Sound Controls**: Added dedicated sound toggle button with visual feedback
-
-### 🐛 Bug Fixes
-
--   **Play Again Fixed**: Properly resets game state on server and all clients
--   **Host Button Fixed**: Host button now works correctly after playing again
--   **State Management**: Improved synchronization between server and clients
--   **Timer Cleanup**: Fixed timer cleanup on game reset
-
-### 📈 Improvements
-
--   **Answer Popups**: Real-time notifications when players answer (top-right corner)
--   **Progress Tracking**: Shows "X/Y answered" for each question
--   **Question Counter**: Displays current question number (e.g., "Question 3 of 20")
--   **Responsive Design**: Fully optimized for mobile and desktop
--   **Anime-Style UI**: Modern black and white Kahoot-inspired design
-
-### 🎯 Educational Impact
-
--   **Real-World Scenarios**: Questions based on actual scam tactics
--   **Interactive Learning**: Learn by doing, not just reading
--   **Family-Friendly**: Suitable for all ages
--   **Reinforcement Learning**: Play multiple times to reinforce concepts
-
-### 🔧 Technical Updates
-
--   **Sound System Module**: New `sounds.js` with Web Audio API integration
--   **Enhanced Server Logic**: Better game state management and reset functionality
--   **Client-Side Improvements**: Better event handling and state synchronization
--   **Updated Documentation**: Comprehensive README with educational focus
-
-### 📱 Compatibility
-
--   ✅ Chrome (recommended)
--   ✅ Firefox
--   ✅ Safari
--   ✅ Edge
--   ✅ Mobile browsers (iOS & Android)
-
----
-
-## Version 1.0.0 - Initial Release
-
--   Basic multiplayer quiz functionality
--   Host/Join system
--   Real-time gameplay
--   Leaderboard system
--   Timer functionality
--   Responsive design
+- Switched Railway configuration to Railpack.
+- Added a deployment healthcheck and current Railway guide.
+- Removed obsolete Nixpacks, Procfile, Vercel, and duplicate deployment files.
+- Added automated server tests for health, room isolation, answer privacy, scoring, and session restoration.

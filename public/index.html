@@ -1,96 +1,317 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta
+			name="description"
+			content="Scam Slayer is a live multiplayer cyber-safety quiz for senior citizens in India."
+		/>
+		<meta name="theme-color" content="#071521" />
+		<title>Scam Slayer - India's Cyber Safety Quiz</title>
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="stylesheet" href="/style.css" />
+		<script src="/socket.io/socket.io.js" defer></script>
+		<script src="/sounds.js" defer></script>
+		<script src="/script.js" defer></script>
+	</head>
+	<body>
+		<div class="ambient ambient-one" aria-hidden="true"></div>
+		<div class="ambient ambient-two" aria-hidden="true"></div>
+		<div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SCam Slayer - Cybersecurity Awareness Quiz</title>
-        <link rel="stylesheet" href="style.css">
-        <script src="/socket.io/socket.io.js"></script>
-        <script src="sounds.js"></script>
+		<div class="app-frame">
+			<header class="topbar">
+				<div class="mini-brand" aria-label="Scam Slayer">
+					<span class="mini-brand-mark" aria-hidden="true">
+						<svg viewBox="0 0 48 48" role="img">
+							<path d="M24 4 39 10v11c0 10.2-6.1 18.3-15 23-8.9-4.7-15-12.8-15-23V10L24 4Z" />
+							<path d="m17 24 4.2 4.2L31.5 18" />
+						</svg>
+					</span>
+					<span>
+						<strong>Scam<span>Slayer</span></strong>
+						<small>India's Cyber Safety Quiz</small>
+					</span>
+				</div>
 
-        <!-- Google tag (gtag.js) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-YWDCMJJPBZ"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag() { dataLayer.push(arguments); }
-            gtag('js', new Date());
+				<div class="topbar-actions">
+					<div id="roomPill" class="room-pill" hidden>
+						<span>Room</span>
+						<strong id="topRoomCode">------</strong>
+					</div>
+					<div id="connectionBadge" class="connection-badge is-connecting">
+						<span class="connection-dot" aria-hidden="true"></span>
+						<span id="connectionText">Connecting</span>
+					</div>
+					<button id="soundToggle" class="icon-button" type="button" aria-pressed="true">
+						<span aria-hidden="true">🔊</span>
+						<span class="button-label">Sound on</span>
+					</button>
+					<button id="leaveRoomBtn" class="icon-button danger" type="button" hidden>
+						<span aria-hidden="true">↩</span>
+						<span class="button-label">Leave</span>
+					</button>
+				</div>
+			</header>
 
-            gtag('config', 'G-YWDCMJJPBZ');
-        </script>
-    </head>
+			<main class="main-content">
+				<section id="homeScreen" class="screen active" aria-labelledby="homeTitle">
+					<div class="hero-layout">
+						<div class="hero-copy">
+							<div class="eyebrow">Cybersecurity awareness for senior citizens of India</div>
+							<h1 id="homeTitle">
+								Learn it. Spot it.
+								<span>Stop it.</span>
+							</h1>
+							<p class="hero-intro">
+								A friendly live quiz that helps families recognise banking, UPI, investment,
+								impersonation, and online-fraud warning signs.
+							</p>
+							<div class="feature-row" aria-label="Quiz details">
+								<div><strong id="homeQuestionCount">20</strong><span>real-life questions</span></div>
+								<div><strong id="homeQuestionSeconds">60s</strong><span>per question</span></div>
+								<div><strong>Live</strong><span>multiplayer rooms</span></div>
+							</div>
+							<div class="safety-callout compact">
+								<span class="safety-icon" aria-hidden="true">☎</span>
+								<div>
+									<strong>Financial cyber fraud?</strong>
+									<span>Call India's cybercrime helpline <b>1930</b> quickly.</span>
+								</div>
+							</div>
+						</div>
 
-    <body>
-        <!-- Answer Popup -->
-        <div id="answerPopup" class="answer-popup">
-            <div class="popup-content">
-                <span class="popup-player"></span>
-                <span class="popup-answer"></span>
-            </div>
-        </div>
+						<div class="entry-card">
+							<div class="entry-card-header">
+								<span class="step-badge">1</span>
+								<div>
+									<h2>Choose your name</h2>
+									<p>This is how other players will see you.</p>
+								</div>
+							</div>
+							<label class="field-label" for="nicknameInput">Nickname</label>
+							<input
+								id="nicknameInput"
+								class="text-input"
+								type="text"
+								placeholder="Example: Dadi, Papa, Daksh"
+								maxlength="24"
+								autocomplete="nickname"
+							/>
 
-        <div class="container">
-            <!-- Initial Screen -->
-            <div id="initialScreen" class="screen active">
-                <h1>🛡️ SCam Slayer</h1>
-                <p class="game-subtitle">Cybersecurity Awareness Quiz</p>
-                <div class="form-group">
-                    <label for="nicknameInput">Enter your nickname:</label>
-                    <input type="text" id="nicknameInput" placeholder="Your nickname" maxlength="20">
-                </div>
-                <div class="button-group">
-                    <button id="hostBtn" class="btn btn-primary">🎮 Host Game</button>
-                    <button id="joinBtn" class="btn btn-secondary">🔗 Join Game</button>
-                </div>
-                <div class="sound-controls">
-                    <button id="soundToggle" class="btn-sound">🔊 Sound ON</button>
-                </div>
-                <div id="statusMessage" class="status-message"></div>
-            </div>
+							<div class="entry-divider"><span>then</span></div>
 
-            <!-- Waiting Room -->
-            <div id="waitingRoom" class="screen">
-                <h2>🏠 Waiting Room</h2>
-                <div id="playersList" class="players-list"></div>
-                <button id="startGameBtn" class="btn btn-success" style="display: none;">🚀 Start Quiz</button>
-                <div id="waitingMessage" class="waiting-message">Waiting for host to start the game...</div>
-            </div>
+							<button id="hostBtn" class="primary-button full" type="button">
+								<span class="button-icon" aria-hidden="true">＋</span>
+								<span><strong>Host a new quiz</strong><small>Create a private room code</small></span>
+							</button>
 
-            <!-- Quiz Screen -->
-            <div id="quizScreen" class="screen">
-                <div class="quiz-header">
-                    <div class="quiz-info">
-                        <div id="questionNumber" class="question-number"></div>
-                        <div id="progressIndicator" class="progress-indicator">0/0 answered</div>
-                    </div>
-                    <div id="timer" class="timer">60</div>
-                </div>
-                <div id="questionText" class="question-text"></div>
-                <div id="optionsContainer" class="options-container"></div>
-                <div id="waitingForOthers" class="waiting-message" style="display: none;">
-                    Waiting for other players to answer...
-                </div>
-            </div>
+							<div class="join-block">
+								<label class="field-label" for="roomCodeInput">Or join an existing room</label>
+								<div class="join-row">
+									<input
+										id="roomCodeInput"
+										class="text-input room-code-input"
+										type="text"
+										placeholder="ABC234"
+										maxlength="6"
+										inputmode="text"
+										autocomplete="off"
+										aria-describedby="roomCodeHint"
+									/>
+									<button id="joinBtn" class="secondary-button" type="button">Join room</button>
+								</div>
+								<p id="roomCodeHint" class="field-hint">Enter the six-character code shown by the host.</p>
+							</div>
 
-            <!-- Leaderboard Screen -->
-            <div id="leaderboardScreen" class="screen">
-                <h2>📊 Leaderboard</h2>
-                <div id="leaderboardContainer" class="leaderboard-container"></div>
-                <button id="nextQuestionBtn" class="btn btn-primary" style="display: none;">➡️ Next Question</button>
-                <div id="hostWaitingMessage" class="waiting-message" style="display: none;">
-                    Waiting for host to continue...
-                </div>
-            </div>
+							<div id="homeStatus" class="status-message" role="status" hidden></div>
+						</div>
+					</div>
+				</section>
 
-            <!-- Game Over Screen -->
-            <div id="gameOverScreen" class="screen">
-                <h2>🎉 Game Over!</h2>
-                <div id="finalLeaderboard" class="leaderboard-container"></div>
-                <button id="playAgainBtn" class="btn btn-success">🔄 Play Again</button>
-            </div>
-        </div>
+				<section id="lobbyScreen" class="screen" aria-labelledby="lobbyTitle" hidden>
+					<div class="section-heading split-heading">
+						<div>
+							<div class="eyebrow">Private multiplayer room</div>
+							<h1 id="lobbyTitle">The team is assembling</h1>
+							<p>Share the room code, then the host can begin when everyone is ready.</p>
+						</div>
+						<div class="share-card">
+							<span>Room code</span>
+							<strong id="lobbyRoomCode">------</strong>
+							<div class="share-actions">
+								<button id="copyCodeBtn" class="small-button" type="button">Copy code</button>
+								<button id="shareRoomBtn" class="small-button" type="button">Share invite</button>
+							</div>
+						</div>
+					</div>
 
-        <script src="script.js"></script>
-    </body>
+					<div class="two-column-layout lobby-layout">
+						<div class="panel-card">
+							<div class="panel-title-row">
+								<div>
+									<h2>Players</h2>
+									<p id="playerCountText">1 player connected</p>
+								</div>
+								<span class="live-chip"><i aria-hidden="true"></i>Live</span>
+							</div>
+							<div id="playersList" class="players-grid" aria-live="polite"></div>
+						</div>
 
+						<div class="panel-card start-panel">
+							<div class="large-icon" aria-hidden="true">🛡️</div>
+							<h2 id="lobbyActionTitle">Waiting for the host</h2>
+							<p id="lobbyActionText">The quiz will appear automatically when the host starts.</p>
+							<button id="startGameBtn" class="primary-button full" type="button" hidden>
+								Start the 20-question quiz
+							</button>
+							<div class="mini-instructions">
+								<div><span>1</span><p>Read each real-life situation.</p></div>
+								<div><span>2</span><p>Choose one answer before time ends.</p></div>
+								<div><span>3</span><p>Learn from the safety tip after every question.</p></div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section id="quizScreen" class="screen" aria-labelledby="questionText" hidden>
+					<div class="quiz-toolbar">
+						<div class="quiz-progress-block">
+							<div class="quiz-progress-labels">
+								<strong id="questionCounter">Question 1 of 20</strong>
+								<span id="answerProgressText">0 of 1 answered</span>
+							</div>
+							<div class="progress-track" aria-hidden="true">
+								<div id="questionProgressFill" class="progress-fill"></div>
+							</div>
+						</div>
+						<div id="timerCard" class="timer-card" aria-label="Time remaining">
+							<svg class="timer-ring" viewBox="0 0 52 52" aria-hidden="true">
+								<circle class="timer-ring-track" cx="26" cy="26" r="22"></circle>
+								<circle id="timerRingValue" class="timer-ring-value" cx="26" cy="26" r="22"></circle>
+							</svg>
+							<div><strong id="timerValue">60</strong><span>seconds</span></div>
+						</div>
+					</div>
+
+					<article class="question-card">
+						<div id="categoryBadge" class="category-badge">Bank safety</div>
+						<h1 id="questionText">Question appears here</h1>
+						<p class="question-help">Select the safest response.</p>
+					</article>
+
+					<div id="optionsContainer" class="options-grid" aria-label="Answer choices"></div>
+					<div id="answerLockMessage" class="answer-lock-message" role="status" hidden>
+						<span aria-hidden="true">✓</span>
+						<strong>Your answer is locked.</strong>
+						<span>Waiting for the other players...</span>
+					</div>
+				</section>
+
+				<section id="resultScreen" class="screen" aria-labelledby="resultTitle" hidden>
+					<div id="resultBanner" class="result-banner">
+						<div id="resultIcon" class="result-icon" aria-hidden="true">✓</div>
+						<div>
+							<div id="resultEyebrow" class="eyebrow">Your answer</div>
+							<h1 id="resultTitle">Correct!</h1>
+							<p id="yourAnswerText"></p>
+						</div>
+					</div>
+
+					<div class="result-grid">
+						<article class="panel-card learning-card">
+							<div class="learning-label">Correct answer</div>
+							<h2 id="correctAnswerText"></h2>
+							<div class="tip-box">
+								<span class="tip-icon" aria-hidden="true">💡</span>
+								<div>
+									<strong>Safety tip</strong>
+									<p id="explanationText"></p>
+								</div>
+							</div>
+						</article>
+
+						<article class="panel-card">
+							<div class="panel-title-row">
+								<div>
+									<h2>How the room answered</h2>
+									<p>Answers are revealed only after everyone finishes.</p>
+								</div>
+							</div>
+							<div id="answerBreakdown" class="answer-breakdown"></div>
+						</article>
+					</div>
+
+					<article class="panel-card leaderboard-card">
+						<div class="panel-title-row">
+							<div>
+								<div class="eyebrow">Live score</div>
+								<h2>Leaderboard</h2>
+							</div>
+							<span id="resultQuestionNumber" class="question-chip">After question 1</span>
+						</div>
+						<div id="leaderboardContainer" class="leaderboard-list"></div>
+					</article>
+
+					<div class="host-control-row">
+						<button id="nextQuestionBtn" class="primary-button" type="button" hidden>
+							Next question
+						</button>
+						<p id="hostWaitingMessage" class="waiting-text">Waiting for the host to continue...</p>
+					</div>
+				</section>
+
+				<section id="gameOverScreen" class="screen" aria-labelledby="gameOverTitle" hidden>
+					<div class="celebration-card">
+						<div class="trophy" aria-hidden="true">🏆</div>
+						<div class="eyebrow">Quiz complete</div>
+						<h1 id="gameOverTitle">You are now a Scam Slayer</h1>
+						<p>Knowledge is strongest when it is shared with family and friends.</p>
+						<div class="personal-result-row">
+							<div><span>Your score</span><strong id="finalScore">0 / 20</strong></div>
+							<div><span>Your rank</span><strong id="finalRank">#1</strong></div>
+						</div>
+					</div>
+
+					<div class="two-column-layout final-layout">
+						<article class="panel-card leaderboard-card">
+							<div class="panel-title-row">
+								<div>
+									<div class="eyebrow">Final results</div>
+									<h2>Leaderboard</h2>
+								</div>
+							</div>
+							<div id="finalLeaderboard" class="leaderboard-list"></div>
+						</article>
+
+						<article class="panel-card rules-card">
+							<div class="eyebrow">Remember these</div>
+							<h2>Six safety rules</h2>
+							<ol>
+								<li>Never share an OTP, ATM PIN, UPI PIN, password, or CVV.</li>
+								<li>Receiving money does not require your UPI PIN.</li>
+								<li>There is no legal process called a “digital arrest”.</li>
+								<li>Verify schemes and links through official channels.</li>
+								<li>Pause, hang up, and speak to a trusted person.</li>
+								<li>For financial cyber fraud, call 1930 quickly.</li>
+							</ol>
+						</article>
+					</div>
+
+					<div class="host-control-row">
+						<button id="playAgainBtn" class="primary-button" type="button" hidden>
+							Play another round
+						</button>
+						<p id="gameOverWaiting" class="waiting-text">Waiting for the host to start another round...</p>
+					</div>
+				</section>
+			</main>
+
+			<footer class="app-footer">
+				<span>Stay alert. Stay safe. Protect your money.</span>
+				<span>Scam Slayer • Educational awareness quiz</span>
+			</footer>
+		</div>
+	</body>
 </html>

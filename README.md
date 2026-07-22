@@ -1,30 +1,86 @@
-# 🛡️ SCam Slayer - Cybersecurity Awareness Quiz
+# Scam Slayer
 
-An educational real-time multiplayer quiz game focused on cybersecurity awareness and scam prevention. Built with Node.js, Express, and Socket.IO. Players learn how to identify and avoid online scams while competing in real-time.
+**Learn it. Spot it. Stop it.**
 
-## ✨ Features
+Scam Slayer is a room-based, live multiplayer cyber-safety quiz designed for senior citizens and families in India. One player hosts a private room, others join with a six-character code, and everyone answers the same 20 real-life fraud-awareness questions together.
 
--   **🎓 Educational Content** - 20 cybersecurity awareness questions teaching scam prevention
--   **🔊 Interactive Sound Effects** - Feedback sounds for all user interactions
--   **🎮 Real-time multiplayer gameplay** using WebSocket connections
--   **👥 Host/Join system** - One player hosts, others join
--   **📛 Nickname system** for player identification
--   **⏱️ 60-second timer** for each question with warning sounds
--   **📊 Live leaderboard** after each question
--   **📈 Progress tracking** - See how many players have answered
--   **🔔 Answer notifications** - Real-time popups when players answer
--   **🎨 Anime-style UI** - Modern black and white Kahoot-inspired design
--   **📱 Fully responsive** - Works perfectly on desktop and mobile devices
+## What changed in version 2
 
-## 🎮 How to Play
+- Replaced the old question bank with all 20 scenarios from the supplied Scam Slayer document.
+- Refreshed a few safety statements where current official guidance or website addresses have changed.
+- Added private room codes so unrelated groups do not enter the same game.
+- Added reconnectable player sessions, host transfer, server-controlled timers, and multiple simultaneous rooms.
+- Prevented selected answers from being broadcast before a question ends.
+- Rebuilt the interface for clearer type, stronger contrast, large answer targets, mobile use, accessible focus states, and a dedicated safety-tip screen.
+- Added a health endpoint and Railway configuration.
 
-1. **Enter your nickname** in the input field
-2. **Toggle sound** on/off using the sound button (🔊/🔇)
-3. **Host a game** by clicking "Host Game" or **join an existing game** by clicking "Join Game"
-4. **Wait in the lobby** until the host starts the game
-5. **Answer cybersecurity questions** within the 60-second time limit
-6. **Learn from each question** about scams, phishing, and online safety
-7. **View the leaderboard** after each question
-8. **Track progress** with real-time answer notifications
-9. **Continue through all 20 questions** to become a SCam Slayer!
-10. **See final results** and play again to reinforce your learning!
+## Tech stack
+
+- Node.js 20+
+- Express
+- Socket.IO
+- Plain HTML, CSS, and JavaScript
+
+## Run locally
+
+```bash
+npm install
+npm start
+```
+
+Open `http://localhost:3000` in two browser windows. Host a room in one window and join using the room code in the other.
+
+For automatic restarts while editing:
+
+```bash
+npm run dev
+```
+
+Run the automated checks with:
+
+```bash
+npm test
+```
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | ---: | --- |
+| `PORT` | `3000` | Port used by the web server. Railway supplies this automatically. |
+| `QUESTION_TIME_SECONDS` | `60` | Time per question. Accepted range: 15–180 seconds. |
+| `MAX_PLAYERS_PER_ROOM` | `50` | Maximum players in one room. Accepted range: 2–200. |
+| `FRONTEND_URL` | empty | Optional comma-separated Socket.IO origin allow-list when the frontend is hosted separately. |
+
+## Important hosting note
+
+Room membership, scores, timers, and reconnect tokens are currently kept in the Node.js process memory. Deploy this version with **one running replica**. A restart or new deployment clears active rooms.
+
+Horizontal scaling requires two changes rather than only adding replicas:
+
+1. Move room and game state to a shared store such as Redis or a database.
+2. Configure a compatible Socket.IO multi-node adapter and load-balancing strategy.
+
+## Project structure
+
+```text
+.
+├── public/
+│   ├── index.html
+│   ├── script.js
+│   ├── sounds.js
+│   ├── style.css
+│   └── favicon.svg
+├── test/
+│   └── server.test.js
+├── questions.js
+├── server.js
+├── railway.toml
+├── DEPLOYMENT.md
+└── package.json
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Railway deployment instructions.
+
+## Safety disclaimer
+
+This is an educational awareness tool, not legal, financial, or law-enforcement advice. For urgent financial cyber fraud in India, call **1930** promptly and report through the official National Cyber Crime Reporting Portal.
